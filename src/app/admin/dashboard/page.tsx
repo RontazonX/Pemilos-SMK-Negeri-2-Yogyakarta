@@ -15,6 +15,16 @@ export default function AdminDashboard() {
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Custom Voter Generation State
+  const [showVoterModal, setShowVoterModal] = useState(false);
+  const [voterPrefix, setVoterPrefix] = useState("");
+  const [voterCount, setVoterCount] = useState(36);
+
+  // Candidate CRUD State
+  const [showCandidateModal, setShowCandidateModal] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<any>(null);
+  const [candidateForm, setCandidateForm] = useState<any>({ number: "", name: "", vision: "", mission: "", image_url: "" });
+
   // Filter & Pagination States
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -91,48 +101,18 @@ export default function AdminDashboard() {
     return result;
   };
 
-  const handleGenerateAccounts = async () => {
-    if (voters.length > 0) {
-      const confirm = window.confirm(`Sudah ada ${voters.length} data pemilih. Yakin ingin menambah/generate lagi?`);
-      if (!confirm) return;
-    }
+  const handleGenerateCustomAccounts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voterPrefix || voterCount < 1) return;
     
     setGenerating(true);
-    
-    const grades = ["X", "XI", "XII"];
-    const majors = [
-      { name: "TAV", count: 1 },
-      { name: "MEKA", count: 1 },
-      { name: "TKR", count: 4 },
-      { name: "TP", count: 4 },
-      { name: "TITL", count: 4 },
-      { name: "GEO", count: 1 },
-      { name: "DPIB", count: 3 },
-      { name: "DKV", count: 2 },
-      { name: "SIJA", count: 2 },
-      { name: "KGS", count: 2 },
-    ];
-    
-    const studentsPerClass = 36;
     const newAccounts: any[] = [];
-
-    grades.forEach(grade => {
-      majors.forEach(major => {
-        for (let c = 1; c <= major.count; c++) {
-          for (let s = 1; s <= studentsPerClass; s++) {
-            const studentNum = s.toString().padStart(2, "0");
-            const className = major.count > 1 ? `${major.name}-${c}` : major.name;
-            const username = `${grade}-${className}-${studentNum}`;
-            
-            newAccounts.push({
-              username: username,
-              password: generateRandomPassword(),
-              has_voted: false
-            });
-          }
-        }
-      });
-    });
+    
+    for (let s = 1; s <= voterCount; s++) {
+      const studentNum = s.toString().padStart(2, "0");
+      const username = `${voterPrefix}-${studentNum}`;
+      newAccounts.push({ username, password: generateRandomPassword(), has_voted: false });
+    }
 
     try {
       const chunkSize = 500;
@@ -141,14 +121,39 @@ export default function AdminDashboard() {
         const { error } = await supabase.from("voters").insert(chunk);
         if (error) throw error;
       }
-      
-      alert(`Berhasil membuat ${newAccounts.length} akun (72 Kelas x 36 Siswa)!`);
+      alert(`Berhasil membuat ${newAccounts.length} akun untuk kelas ${voterPrefix}!`);
+      setShowVoterModal(false);
+      setVoterPrefix("");
       fetchData();
     } catch (error: any) {
       alert("Terjadi kesalahan saat generate akun: " + error.message);
     }
-    
     setGenerating(false);
+  };
+
+  const handleSaveCandidate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingCandidate) {
+      const { error } = await supabase.from("candidates").update(candidateForm).eq("id", editingCandidate.id);
+      if (error) alert("Error update: " + error.message);
+      else alert("Berhasil update kandidat!");
+    } else {
+      const { error } = await supabase.from("candidates").insert(candidateForm);
+      if (error) alert("Error tambah: " + error.message);
+      else alert("Berhasil tambah kandidat!");
+    }
+    setShowCandidateModal(false);
+    fetchData();
+  };
+
+  const handleDeleteCandidate = async (id: string) => {
+    if (!window.confirm("Yakin hapus kandidat ini?")) return;
+    const { error } = await supabase.from("candidates").delete().eq("id", id);
+    if (error) alert("Error hapus: " + error.message);
+    else {
+      alert("Berhasil hapus kandidat!");
+      fetchData();
+    }
   };
 
   const handleResetAccounts = async () => {
@@ -268,6 +273,12 @@ export default function AdminDashboard() {
                   <button onClick={() => { setActiveTab('accounts'); setSidebarOpen(false); }} className={`group relative flex w-full items-center gap-2.5 rounded-sm px-4 py-2 font-medium duration-300 ease-in-out hover:bg-[#333A48] text-[#DEE4EE] ${activeTab === 'accounts' ? 'bg-[#333A48]' : ''}`}>
                     <Users className="w-5 h-5" />
                     Manajemen Akun
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => { setActiveTab('candidates'); setSidebarOpen(false); }} className={`group relative flex w-full items-center gap-2.5 rounded-sm px-4 py-2 font-medium duration-300 ease-in-out hover:bg-[#333A48] text-[#DEE4EE] ${activeTab === 'candidates' ? 'bg-[#333A48]' : ''}`}>
+                    <UserPlus className="w-5 h-5" />
+                    Manajemen Kandidat
                   </button>
                 </li>
               </ul>
@@ -418,7 +429,7 @@ export default function AdminDashboard() {
                 {/* Header Actions */}
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-[#E2E8F0] pb-4 mb-4">
                   <div>
-                    <h3 className="font-bold text-[#1c2434] text-lg">Manajemen Akun Pemilih (72 Kelas)</h3>
+                    <h3 className="font-bold text-[#1c2434] text-lg">Manajemen Akun Pemilih</h3>
                     <p className="text-sm font-medium text-[#64748B]">Total: {totalVoters} Akun terdaftar</p>
                   </div>
                   <div className="flex flex-wrap gap-3 w-full xl:w-auto">
@@ -430,12 +441,11 @@ export default function AdminDashboard() {
                       Export CSV
                     </button>
                     <button 
-                      onClick={handleGenerateAccounts}
-                      disabled={generating}
-                      className="inline-flex items-center justify-center gap-2.5 rounded-md bg-[#3C50E0] py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 disabled:opacity-50 flex-1 xl:flex-none"
+                      onClick={() => setShowVoterModal(true)}
+                      className="inline-flex items-center justify-center gap-2.5 rounded-md bg-[#3C50E0] py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 flex-1 xl:flex-none"
                     >
                       <UserPlus className="w-4 h-4" />
-                      {generating ? "Memproses..." : "Generate 2592 Akun"}
+                      Buat Akun Kelas
                     </button>
                     <button 
                       onClick={handleResetAccounts}
@@ -530,6 +540,109 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
+              </div>
+            </div>
+          )}
+
+          {/* Candidates Tab */}
+          {activeTab === 'candidates' && (
+            <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+              <div className="tailadmin-card p-6.5">
+                <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-4 mb-4">
+                  <h3 className="font-bold text-[#1c2434] text-lg">Manajemen Kandidat</h3>
+                  <button onClick={() => {
+                    setEditingCandidate(null);
+                    setCandidateForm({ number: "", name: "", vision: "", mission: "", image_url: "" });
+                    setShowCandidateModal(true);
+                  }} className="inline-flex items-center gap-2 rounded-md bg-[#3C50E0] py-2 px-4 text-white font-medium hover:bg-opacity-90">
+                    <UserPlus className="w-4 h-4" />
+                    Tambah Kandidat
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {candidates.map(c => (
+                    <div key={c.id} className="border border-[#E2E8F0] rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between">
+                       <div>
+                         <div className="h-40 w-full rounded-lg overflow-hidden bg-gray-100 mb-4 border border-[#E2E8F0]">
+                           {c.image_url ? (
+                             <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" />
+                           ) : (
+                             <div className="h-full w-full flex items-center justify-center text-[#64748B] font-bold text-4xl">{c.number}</div>
+                           )}
+                         </div>
+                         <h4 className="font-bold text-[#1c2434] text-lg mb-1">Paslon {c.number}: {c.name}</h4>
+                         <div className="text-sm text-[#64748B] mb-4 line-clamp-3"><strong>Visi:</strong> {c.vision}</div>
+                       </div>
+                       <div className="flex gap-2 mt-auto">
+                          <button onClick={() => { setEditingCandidate(c); setCandidateForm(c); setShowCandidateModal(true); }} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-md font-medium transition-colors">Edit</button>
+                          <button onClick={() => handleDeleteCandidate(c.id)} className="flex-1 bg-[#DC3545] hover:bg-red-700 text-white py-2 rounded-md font-medium transition-colors">Hapus</button>
+                       </div>
+                    </div>
+                  ))}
+                  {candidates.length === 0 && (
+                    <div className="col-span-full py-10 text-center text-[#64748B]">Belum ada kandidat yang ditambahkan.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Voter Generation Modal */}
+          {showVoterModal && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+                <h3 className="text-xl font-bold mb-4 text-[#1c2434]">Buat Akun Kelas Custom</h3>
+                <form onSubmit={handleGenerateCustomAccounts}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-[#1c2434] mb-1">Prefix Kelas (contoh: X-TKR-1)</label>
+                    <input required type="text" value={voterPrefix} onChange={(e) => setVoterPrefix(e.target.value)} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] focus:outline-none focus:border-[#3C50E0]" />
+                  </div>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-[#1c2434] mb-1">Jumlah Siswa</label>
+                    <input required type="number" min="1" value={voterCount} onChange={(e) => setVoterCount(parseInt(e.target.value))} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] focus:outline-none focus:border-[#3C50E0]" />
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => setShowVoterModal(false)} className="px-4 py-2 border border-[#E2E8F0] rounded-md text-[#64748B] font-medium hover:bg-gray-50">Batal</button>
+                    <button type="submit" disabled={generating} className="px-4 py-2 bg-[#3C50E0] rounded-md text-white font-medium hover:bg-opacity-90 disabled:opacity-50">{generating ? "Memproses..." : "Generate"}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Candidate Modal */}
+          {showCandidateModal && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in overflow-y-auto py-10">
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 my-auto">
+                <h3 className="text-xl font-bold mb-4 text-[#1c2434]">{editingCandidate ? "Edit Kandidat" : "Tambah Kandidat"}</h3>
+                <form onSubmit={handleSaveCandidate}>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                     <div>
+                       <label className="block text-sm font-medium text-[#1c2434] mb-1">Nomor Urut</label>
+                       <input required type="number" value={candidateForm.number} onChange={e => setCandidateForm({...candidateForm, number: e.target.value})} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] focus:outline-none focus:border-[#3C50E0]" />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-[#1c2434] mb-1">Nama Kandidat</label>
+                       <input required type="text" value={candidateForm.name} onChange={e => setCandidateForm({...candidateForm, name: e.target.value})} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] focus:outline-none focus:border-[#3C50E0]" />
+                     </div>
+                   </div>
+                   <div className="mb-4">
+                     <label className="block text-sm font-medium text-[#1c2434] mb-1">URL Foto (Opsional)</label>
+                     <input type="text" value={candidateForm.image_url} onChange={e => setCandidateForm({...candidateForm, image_url: e.target.value})} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] focus:outline-none focus:border-[#3C50E0]" />
+                   </div>
+                   <div className="mb-4">
+                     <label className="block text-sm font-medium text-[#1c2434] mb-1">Visi</label>
+                     <textarea required value={candidateForm.vision} onChange={e => setCandidateForm({...candidateForm, vision: e.target.value})} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] h-20 focus:outline-none focus:border-[#3C50E0]"></textarea>
+                   </div>
+                   <div className="mb-6">
+                     <label className="block text-sm font-medium text-[#1c2434] mb-1">Misi</label>
+                     <textarea required value={candidateForm.mission} onChange={e => setCandidateForm({...candidateForm, mission: e.target.value})} className="w-full border border-[#E2E8F0] rounded-md px-3 py-2 text-[#1c2434] h-24 focus:outline-none focus:border-[#3C50E0]"></textarea>
+                   </div>
+                   <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => setShowCandidateModal(false)} className="px-4 py-2 border border-[#E2E8F0] rounded-md text-[#64748B] font-medium hover:bg-gray-50">Batal</button>
+                    <button type="submit" className="px-4 py-2 bg-[#3C50E0] rounded-md text-white font-medium hover:bg-opacity-90">Simpan</button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

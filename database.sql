@@ -29,6 +29,16 @@ ALTER TABLE public.voters ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Candidates are viewable by everyone" ON public.candidates
     FOR SELECT USING (true);
 
+-- Allow admin CRUD operations for candidates (using anon key in this simple setup)
+CREATE POLICY "Admin can insert candidates" ON public.candidates
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Admin can update candidates" ON public.candidates
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Admin can delete candidates" ON public.candidates
+    FOR DELETE USING (true);
+
 -- Voters can read their own data and update it only if they haven't voted yet
 CREATE POLICY "Voters can view own data" ON public.voters
     FOR SELECT USING (true);
